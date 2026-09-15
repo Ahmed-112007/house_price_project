@@ -1,115 +1,178 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
+import React, { useState, useEffect } from 'react';
+import './App.css';
+
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 function App() {
-  const [carpetAreaSqft, setCarpetAreaSqft] = useState(1000);
-  const [floorNum, setFloorNum] = useState(2);
-  const [bathroom, setBathroom] = useState(2);
-  const [balcony, setBalcony] = useState(1);
-  const [furnishing, setFurnishing] = useState("Semi-Furnished");
-  const [transaction, setTransaction] = useState("Resale");
-  const [ownership, setOwnership] = useState("Freehold");
-  const [facing, setFacing] = useState("North");
-  const [location, setLocation] = useState("");
   const [locations, setLocations] = useState([]);
-  const [prediction, setPrediction] = useState(null);
+  const [formData, setFormData] = useState({
+    location: '',
+    carpetArea: '1200',
+    floor: '3',
+    bathrooms: '2',
+    balconies: '1',
+    furnishing: 'Semi-Furnished',
+    transaction: 'Resale',
+    ownership: 'Freehold',
+    facing: 'North'
+  });
 
+  const [predictedPrice, setPredictedPrice] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // جلب قائمة المناطق المباشرة من الباك إند
   useEffect(() => {
-    axios.get("http://localhost:8000/locations")
-      .then((res) => {
-        if (res.data.locations && res.data.locations.length > 0) {
-          setLocations(res.data.locations);
-          setLocation(res.data.locations[0]);
+    fetch(`${API_BASE_URL}/locations`)
+      .then((res) => res.json())
+      .then((data) => {
+        const locs = data.locations || (Array.isArray(data) ? data : []);
+        if (locs.length > 0) {
+          setLocations(locs);
+          setFormData((prev) => ({ ...prev, location: locs[0] }));
         }
       })
-      .catch(() => {
-        const defaultLocs = ["New Cairo", "Maadi", "Zamalek", "Nasr City", "Heliopolis", "Sheikh Zayed", "other"];
-        setLocations(defaultLocs);
-        setLocation(defaultLocs[0]);
-      });
+      .catch((err) => console.error("خطأ في جلب الأماكن:", err));
   }, []);
 
-  const handlePredict = () => {
-    axios.post("http://localhost:8000/predict", {
-      location: location,
-      carpet_area_sqft: parseFloat(carpetAreaSqft),
-      floor_num: parseInt(floorNum),
-      bathroom: parseInt(bathroom),
-      balcony: parseInt(balcony),
-      furnishing: furnishing,
-      transaction: transaction,
-      ownership: ownership,
-      facing: facing
-    })
-    .then(res => setPrediction(res.data.predicted_price))
-    .catch(err => alert("حدث خطأ أثناء إجراء التوقع"));
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handlePredict = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setPredictedPrice(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/predict`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          location: formData.location,
+          carpet_area: Number(formData.carpetArea),
+          floor: Number(formData.floor),
+          bathrooms: Number(formData.bathrooms),
+          balconies: Number(formData.balconies),
+          furnishing: formData.furnishing,
+          transaction: formData.transaction,
+          ownership: formData.ownership,
+          facing: formData.facing
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setPredictedPrice(data.predicted_price);
+      } else {
+        alert("خطأ من السيرفر: " + (data.detail || JSON.stringify(data)));
+      }
+    } catch (error) {
+      console.error("Fetch Error:", error);
+      alert("تعذر الاتصال بالباك إند. تأكد من تشغيل الباك إند على Port 8000");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div style={{ padding: "30px", color: "#fff", maxWidth: "500px", margin: "0 auto", fontFamily: "sans-serif" }}>
-      <h2 style={{ textAlign: "center" }}>House Price Predictor</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        
-        <label>Location:</label>
-        <select value={location} onChange={(e) => setLocation(e.target.value)}>
-          {locations.map((loc, index) => (
-            <option key={index} value={loc}>{loc}</option>
-          ))}
-        </select>
+    <div className="container">
+      <div className="card">
+        <div className="header">
+          <div className="icon-wrapper">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+          </div>
+          <h1>House Price Predictor</h1>
+          <p className="subtitle">توقّع قيمة بيتك بذكاء وسهولة</p>
+        </div>
 
-        <label>Carpet Area (sq ft):</label>
-        <input type="number" value={carpetAreaSqft} onChange={(e) => setCarpetAreaSqft(e.target.value)} />
+        <form onSubmit={handlePredict}>
+          <div className="form-group">
+            <label>Location</label>
+            <select name="location" value={formData.location} onChange={handleChange}>
+              {locations.map((loc, idx) => (
+                <option key={idx} value={loc}>{loc}</option>
+              ))}
+            </select>
+          </div>
 
-        <label>Floor Number:</label>
-        <input type="number" value={floorNum} onChange={(e) => setFloorNum(e.target.value)} />
+          <div className="form-group">
+            <label>Carpet Area (sq ft):</label>
+            <input type="number" name="carpetArea" value={formData.carpetArea} onChange={handleChange} required />
+          </div>
 
-        <label>Bathrooms:</label>
-        <input type="number" value={bathroom} onChange={(e) => setBathroom(e.target.value)} />
+          <div className="form-group">
+            <label>Floor Number:</label>
+            <input type="number" name="floor" value={formData.floor} onChange={handleChange} required />
+          </div>
 
-        <label>Balconies:</label>
-        <input type="number" value={balcony} onChange={(e) => setBalcony(e.target.value)} />
+          <div className="form-group">
+            <label>Bathrooms:</label>
+            <input type="number" name="bathrooms" value={formData.bathrooms} onChange={handleChange} required />
+          </div>
 
-        <label>Furnishing Status:</label>
-        <select value={furnishing} onChange={(e) => setFurnishing(e.target.value)}>
-          <option value="Furnished">Furnished</option>
-          <option value="Semi-Furnished">Semi-Furnished</option>
-          <option value="Unfurnished">Unfurnished</option>
-        </select>
+          <div className="form-group">
+            <label>Balconies:</label>
+            <input type="number" name="balconies" value={formData.balconies} onChange={handleChange} required />
+          </div>
 
-        <label>Transaction Type:</label>
-        <select value={transaction} onChange={(e) => setTransaction(e.target.value)}>
-          <option value="New Property">New Property</option>
-          <option value="Resale">Resale</option>
-        </select>
+          <div className="form-group">
+            <label>Furnishing Status:</label>
+            <select name="furnishing" value={formData.furnishing} onChange={handleChange}>
+              <option value="Furnished">Furnished</option>
+              <option value="Semi-Furnished">Semi-Furnished</option>
+              <option value="Unfurnished">Unfurnished</option>
+            </select>
+          </div>
 
-        <label>Ownership:</label>
-        <select value={ownership} onChange={(e) => setOwnership(e.target.value)}>
-          <option value="Freehold">Freehold</option>
-          <option value="Leasehold">Leasehold</option>
-          <option value="Co-operative Society">Co-operative Society</option>
-          <option value="Power of Attorney">Power of Attorney</option>
-        </select>
+          <div className="form-group">
+            <label>Transaction Type:</label>
+            <select name="transaction" value={formData.transaction} onChange={handleChange}>
+              <option value="New Property">New Property</option>
+              <option value="Resale">Resale</option>
+            </select>
+          </div>
 
-        <label>Facing Direction:</label>
-        <select value={facing} onChange={(e) => setFacing(e.target.value)}>
-          <option value="North">North</option>
-          <option value="South">South</option>
-          <option value="East">East</option>
-          <option value="West">West</option>
-          <option value="North-East">North-East</option>
-          <option value="North-West">North-West</option>
-          <option value="South-East">South-East</option>
-          <option value="South-West">South-West</option>
-        </select>
+          <div className="form-group">
+            <label>Ownership:</label>
+            <select name="ownership" value={formData.ownership} onChange={handleChange}>
+              <option value="Freehold">Freehold</option>
+              <option value="Leasehold">Leasehold</option>
+            </select>
+          </div>
 
-        <button onClick={handlePredict} style={{ padding: "12px", backgroundColor: "#00aaff", color: "#fff", border: "none", cursor: "pointer", marginTop: "10px", fontWeight: "bold" }}>
-          Predict Price
-        </button>
+          <div className="form-group">
+            <label>Facing Direction:</label>
+            <select name="facing" value={formData.facing} onChange={handleChange}>
+              <option value="North">North</option>
+              <option value="South">South</option>
+              <option value="East">East</option>
+              <option value="West">West</option>
+              <option value="North-East">North-East</option>
+              <option value="North-West">North-West</option>
+              <option value="South-East">South-East</option>
+              <option value="South-West">South-West</option>
+            </select>
+          </div>
 
-        {prediction !== null && (
-          <h3 style={{ marginTop: "15px", color: "#4caf50", textAlign: "center" }}>
-            Predicted Price: ~{prediction} Lakhs
-          </h3>
+          <button type="submit" className="submit-btn" disabled={loading}>
+            {loading ? "جاري التوقع..." : "توقّع السعر"}
+          </button>
+        </form>
+
+        {predictedPrice !== null && (
+          <div className="result-box">
+            <h3>السعر المتوقع:</h3>
+            <p className="price">${predictedPrice.toLocaleString()}</p>
+          </div>
         )}
       </div>
     </div>
