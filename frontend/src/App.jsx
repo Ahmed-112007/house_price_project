@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-const API_BASE_URL = "http://127.0.0.1:8000";
-
+const API_BASE_URL = "https://saddling-suffrage-scheming.ngrok-free.dev";
 function App() {
   const [locations, setLocations] = useState([]);
   const [formData, setFormData] = useState({
@@ -20,9 +19,10 @@ function App() {
   const [predictedPrice, setPredictedPrice] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // جلب قائمة المناطق المباشرة من الباك إند
   useEffect(() => {
-    fetch(`${API_BASE_URL}/locations`)
+fetch(`${API_BASE_URL}/locations`, {
+  headers: { "ngrok-skip-browser-warning": "true" }
+      })
       .then((res) => res.json())
       .then((data) => {
         const locs = data.locations || (Array.isArray(data) ? data : []);

@@ -1,12 +1,12 @@
+import os
+import json
+import joblib
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import joblib
-import pandas as pd
-import json
-import os
 
-app = FastAPI()
+app = FastAPI(title="House Price Prediction API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,63 +16,77 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(CURRENT_DIR)
+
+MODEL_PATH = os.path.join(BASE_DIR, "models", "house_price.pkl")
+LOCATIONS_PATH = os.path.join(BASE_DIR, "models", "locations.json")
+
+model = None
+if os.path.exists(MODEL_PATH):
+    try:
+        model = joblib.load(MODEL_PATH)
+        print("Model loaded successfully with joblib!")
+    except Exception as e:
+        print(f"Error loading model: {e}")
 class PredictionRequest(BaseModel):
     location: str
-    carpet_area_sqft: float
-    floor_num: int
-    bathroom: int
-    balcony: int
+    carpet_area: float
+    floor: int
+    bathrooms: int
+    balconies: int
     furnishing: str
     transaction: str
     ownership: str
     facing: str
 
-model_store = {}
-
-cairo_locations = [
-    "New Cairo",
-    "Maadi",
-    "Zamalek",
-    "Nasr City",
-    "Heliopolis",
-    "Sheikh Zayed",
-    "6th of October",
-    "El Shorouk",
-    "Madinaty",
-    "Rehab City",
-    "other"
-]
-
-@app.on_event("startup")
-def load_assets():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(base_dir, "price.pkl")
-    locations_path = os.path.join(base_dir, "locations.json")
-    
-    if os.path.exists(model_path):
-        model_store["model"] = joblib.load(model_path)
-    
-    if os.path.exists(locations_path):
-        with open(locations_path, "r", encoding="utf-8") as f:
-            model_store["locations"] = json.load(f)
+@app.get("/")
+def read_root():
+    return {"message": "House Price Prediction API is Running!"}
 
 @app.get("/locations")
 def get_locations():
-    return {"locations": cairo_locations}
+    if os.path.exists(LOCATIONS_PATH):
+        try:
+            with open(LOCATIONS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return {"locations": data}
+                return data
+        except Exception as e:
+            print(f"Error reading locations.json: {e}")
+    return {"locations": []}
 
 @app.post("/predict")
-def predict_price(request: PredictionRequest):
-    if "model" in model_store:
-        try:
-            input_data = pd.DataFrame([request.dict()])
-            prediction = model_store["model"].predict(input_data)[0]
-            return {"predicted_price": round(float(prediction), 2)}
-        except Exception:
-            pass
-            
-    furnishing_mult = 1.2 if request.furnishing == "Furnished" else (1.1 if request.furnishing == "Semi-Furnished" else 1.0)
-    transaction_mult = 1.15 if request.transaction == "New Property" else 1.0
+def predict_price(data: PredictionRequest):
+    if model is None:
+        raise HTTPException(
+            status_code=500, 
+            detail="Model file not loaded."
+        )
     
-    base = (request.carpet_area_sqft * 0.05) + (request.bathroom * 1.5) + (request.balcony * 0.8) + (request.floor_num * 0.2)
-    estimated = base * furnishing_mult * transaction_mult
-    return {"predicted_price": round(estimated, 2)}
+    try:
+
+          
+        input_data = pd.DataFrame([{
+            'location': data.location,
+            'location_clean': data.location,  
+            'bedrooms': data.bathrooms,      
+            'carpet_area': data.carpet_area,
+            'floor': data.floor,
+            'bathrooms': data.bathrooms,
+            'balconies': data.balconies,
+            'furnishing': data.furnishing,
+            'transaction': data.transaction,
+            'ownership': data.ownership,
+            'facing': data.facing
+        }])
+        
+        prediction = model.predict(input_data)[0]
+        
+        return {
+            "status": "success",
+            "predicted_price": round(float(prediction), 2)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
