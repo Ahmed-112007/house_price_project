@@ -167,16 +167,14 @@ fetch(`${API_BASE_URL}/locations`, {
             {loading ? "جاري التوقع..." : "توقّع السعر"}
           </button>
         </form>
-
-        {predictedPrice !== null && (
-          <div className="result-box">
-            <h3>السعر المتوقع:</h3>
-            <p className="price">${predictedPrice.toLocaleString()}</p>
-          </div>
-        )}
-      </div>
+ {predictedPrice !== null && (
+        <div className="result-box">
+          <h3>السعر المتوقع:</h3>
+          <p className="price">{(predictedPrice).toLocaleString()} EGP</p>
+        </div>
+      )}
     </div>
-  );
-}
-
+  </div>
+);
+ }
 export default App;
